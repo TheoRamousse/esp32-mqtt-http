@@ -290,4 +290,8 @@ void loop()
   esp_sleep_enable_timer_wakeup(TEMP_SLEEP_DURATION * 100000);
   delay(500);
   esp_light_sleep_start();
+  if (IS_BINARY)
+    IS_BINARY = 0;
+  else
+    IS_BINARY = 1;
 }
