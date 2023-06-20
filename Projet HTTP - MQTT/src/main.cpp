@@ -7,6 +7,7 @@
 #include "../lib/arduinoJson.h"
 #include <EEPROM.h>
 #include <PubSubClient.h>
+#include <bitset>
 
 const char *ssid = "iPhone de Théo";
 const char *password = "zzzzzzzz";
@@ -14,6 +15,7 @@ const char *password = "zzzzzzzz";
 int TEMP_SLEEP_DURATION = 2;
 int CONNECTION_FREQ = 10;
 int PROTOCOLE = 2;
+int IS_BINARY = 1;
 
 WiFiClient client;
 String urlHttp = "http://172.20.10.3:3000";
@@ -29,6 +31,16 @@ int64_t getTime()
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return (tv.tv_sec * 1000LL + (tv.tv_usec / 1000LL));
+}
+
+std::string stringToBinary(std::string const &str)
+{
+  std::string binary = "";
+  for (char const &c : str)
+  {
+    binary += std::bitset<8>(c).to_string() + ' ';
+  }
+  return binary;
 }
 
 String asString(float *buffer)
@@ -194,9 +206,11 @@ void sendRequest()
 
         HTTPClient http;
         http.begin(client, urlHttp + "/api/esp32/esp32test");
-        Serial.println(serialize());
         http.addHeader("Content-Type", "application/json");
-        int httpCode = http.PUT(serialize());
+        String text = serialize();
+        if (IS_BINARY == 1)
+          text = stringToBinary(text.c_str()).c_str();
+        int httpCode = http.PUT(text);
 
         if (httpCode > 0)
         { // Check for the returning code
@@ -239,8 +253,11 @@ void sendRequest()
       { // If a new client connects,
         mqttClient.loop();
 
-        mqttClient.publish("esp", "esp32");
-        mqttClient.publish("esp32", serialize().c_str());
+        mqttClient.publish("esp", "esp32 " + IS_BINARY);
+        String text = serialize();
+        if (IS_BINARY == 1)
+          text = stringToBinary(text.c_str()).c_str();
+        mqttClient.publish("esp32", text.c_str());
       }
     }
   }
