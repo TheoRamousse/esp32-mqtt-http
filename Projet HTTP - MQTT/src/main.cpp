@@ -15,12 +15,12 @@ const char *password = "zzzzzzzz";
 int TEMP_SLEEP_DURATION = 2;
 int CONNECTION_FREQ = 10;
 int PROTOCOLE = 2;
-int IS_BINARY = 1;
+int IS_BINARY = 0;
 
 WiFiClient client;
 String urlHttp = "http://172.20.10.3:3000";
 const char *mqtt_server = "172.20.10.3";
-String idForBroker = "monSuperDevice123";
+String idForBroker = "monSuperDevinhuhuhuce123";
 
 PubSubClient mqttClient(client);
 
@@ -120,7 +120,6 @@ void callback(char *topic, byte *payload, unsigned int length)
 {
   DynamicJsonDocument doc(256);
   DeserializationError error = deserializeJson(doc, payload);
-
   // Test if parsing succeeds.
   if (error)
   {
@@ -132,7 +131,7 @@ void callback(char *topic, byte *payload, unsigned int length)
   TEMP_SLEEP_DURATION = doc["tempFreq"];
   CONNECTION_FREQ = doc["connectionFreq"];
   PROTOCOLE = doc["connectionConfig"];
-
+  Serial.println(TEMP_SLEEP_DURATION);
   saveConfigToEEPROM();
 }
 
@@ -163,7 +162,7 @@ void reconnect()
 
 void sendRequest()
 {
-
+  WiFi.mode(WIFI_AP);
   WiFi.begin(ssid, password);
   delay(1000);
 
@@ -253,7 +252,7 @@ void sendRequest()
       { // If a new client connects,
         mqttClient.loop();
 
-        mqttClient.publish("esp", "esp32 " + IS_BINARY);
+        mqttClient.publish("esp", "esp32");
         String text = serialize();
         if (IS_BINARY == 1)
           text = stringToBinary(text.c_str()).c_str();
@@ -261,6 +260,9 @@ void sendRequest()
       }
     }
   }
+
+  WiFi.disconnect();
+  WiFi.mode(WIFI_OFF);
 }
 
 void setup()
@@ -290,7 +292,7 @@ void loop()
   esp_sleep_enable_timer_wakeup(TEMP_SLEEP_DURATION * 100000);
   delay(500);
   esp_light_sleep_start();
-  if (IS_BINARY)
+  if (IS_BINARY == 1)
     IS_BINARY = 0;
   else
     IS_BINARY = 1;
