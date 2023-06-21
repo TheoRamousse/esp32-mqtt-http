@@ -7,40 +7,76 @@
 #include "../lib/arduinoJson.h"
 #include <EEPROM.h>
 #include <PubSubClient.h>
-#include <bitset>
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
+#include <BLE2902.h>
+
+#define SERVICE_UUID "9e37b54e-52d1-493c-8969-3bf5c986987b"
+#define CHARACTERISTIC_UUID "4a840088-60bb-4edb-8eeb-1dc4dd3592c9"
 
 const char *ssid = "iPhone de Théo";
 const char *password = "zzzzzzzz";
 
+BLEServer *pServer;
+BLECharacteristic *pCharacteristic;
+bool deviceConnected = false;
+bool oldDeviceConnected = false;
+
 int TEMP_SLEEP_DURATION = 2;
 int CONNECTION_FREQ = 10;
 int PROTOCOLE = 2;
-int IS_BINARY = 0;
 
 WiFiClient client;
-String urlHttp = "http://172.20.10.3:3000";
+String urlHttp = "http://172.20.10.3:3001";
 const char *mqtt_server = "172.20.10.3";
-String idForBroker = "monSuperDevinhuhuhuce123";
+String idForBroker = "monSuperDevinhuhezhueriguruhuce123";
 
 PubSubClient mqttClient(client);
 
 int64_t tsStart;
+
+class MyServerCallbacks : public BLEServerCallbacks
+{
+  void onConnect(BLEServer *pServer)
+  {
+    deviceConnected = true;
+  }
+
+  void onDisconnect(BLEServer *pServer)
+  {
+    deviceConnected = false;
+  }
+};
+
+void processBLEData(String data)
+{
+
+  Serial.println("Données BLE reçues : " + data);
+
+  pCharacteristic->setValue("Données reçues avec succès !");
+  pCharacteristic->notify();
+}
+
+class MyCallbacks : public BLECharacteristicCallbacks
+{
+  void onWrite(BLECharacteristic *pCharacteristic)
+  {
+    std::string value = pCharacteristic->getValue();
+
+    if (value.length() > 0)
+    {
+      // Appeler la fonction pour traiter les données
+      processBLEData(value.c_str());
+    }
+  }
+};
 
 int64_t getTime()
 {
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return (tv.tv_sec * 1000LL + (tv.tv_usec / 1000LL));
-}
-
-std::string stringToBinary(std::string const &str)
-{
-  std::string binary = "";
-  for (char const &c : str)
-  {
-    binary += std::bitset<8>(c).to_string() + ' ';
-  }
-  return binary;
 }
 
 String asString(float *buffer)
@@ -116,25 +152,6 @@ String serialize()
   return result;
 }
 
-void callback(char *topic, byte *payload, unsigned int length)
-{
-  DynamicJsonDocument doc(256);
-  DeserializationError error = deserializeJson(doc, payload);
-  // Test if parsing succeeds.
-  if (error)
-  {
-    Serial.print(F("deserializeJson() failed: "));
-    Serial.println(error.f_str());
-    return;
-  }
-
-  TEMP_SLEEP_DURATION = doc["tempFreq"];
-  CONNECTION_FREQ = doc["connectionFreq"];
-  PROTOCOLE = doc["connectionConfig"];
-  Serial.println(TEMP_SLEEP_DURATION);
-  saveConfigToEEPROM();
-}
-
 void reconnect()
 {
   // Loop until we're reconnected
@@ -145,9 +162,6 @@ void reconnect()
     if (mqttClient.connect(idForBroker.c_str()))
     {
       Serial.println("connected");
-      // Subscribe
-      mqttClient.setCallback(callback);
-      mqttClient.subscribe("esp");
     }
     else
     {
@@ -207,8 +221,6 @@ void sendRequest()
         http.begin(client, urlHttp + "/api/esp32/esp32test");
         http.addHeader("Content-Type", "application/json");
         String text = serialize();
-        if (IS_BINARY == 1)
-          text = stringToBinary(text.c_str()).c_str();
         int httpCode = http.PUT(text);
 
         if (httpCode > 0)
@@ -254,10 +266,10 @@ void sendRequest()
 
         mqttClient.publish("esp", "esp32");
         String text = serialize();
-        if (IS_BINARY == 1)
-          text = stringToBinary(text.c_str()).c_str();
         mqttClient.publish("esp32", text.c_str());
       }
+
+      mqttClient.disconnect();
     }
   }
 
@@ -274,6 +286,26 @@ void setup()
   loadConfigFromEEPROM();
   initBuffer();
 
+  BLEDevice::init("ESP des Théos"); // Nom du périphérique BLE
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+
+  BLEService *pService = pServer->createService(BLEUUID((uint16_t)0x180F)); // Service générique de batterie
+
+  pCharacteristic = pService->createCharacteristic(
+      BLEUUID((uint16_t)0x2A19), // Caractéristique de niveau de batterie
+      BLECharacteristic::PROPERTY_READ |
+          BLECharacteristic::PROPERTY_WRITE |
+          BLECharacteristic::PROPERTY_NOTIFY |
+          BLECharacteristic::PROPERTY_INDICATE);
+
+  pCharacteristic->setCallbacks(new MyCallbacks());
+
+  pCharacteristic->addDescriptor(new BLE2902());
+
+  pService->start();
+  pServer->getAdvertising()->start();
+
   tsStart = getTime();
 }
 
@@ -281,6 +313,20 @@ void loop()
 {
 
   int64_t diff = getTime() - tsStart;
+
+  if (!deviceConnected && oldDeviceConnected)
+  {
+    delay(500);                  // Attendre une déconnexion propre
+    pServer->startAdvertising(); // Recommencer l'annonce
+    Serial.println("Attente de la connexion BLE...");
+    oldDeviceConnected = deviceConnected;
+  }
+
+  if (deviceConnected && !oldDeviceConnected)
+  {
+    oldDeviceConnected = deviceConnected;
+  }
+
   if (diff > CONNECTION_FREQ * 1000)
   {
     sendRequest();
@@ -292,8 +338,4 @@ void loop()
   esp_sleep_enable_timer_wakeup(TEMP_SLEEP_DURATION * 100000);
   delay(500);
   esp_light_sleep_start();
-  if (IS_BINARY == 1)
-    IS_BINARY = 0;
-  else
-    IS_BINARY = 1;
 }
