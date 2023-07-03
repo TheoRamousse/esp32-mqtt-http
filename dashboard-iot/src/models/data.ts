@@ -8,7 +8,7 @@ export class Data {
     conductSoil: number,
     tempSoil: number,
     waterSoil: number,
-    receivedAt: number
+    receivedAt: string
   ) {
     this.conductSoil = conductSoil;
     this.tempSoil = tempSoil;
