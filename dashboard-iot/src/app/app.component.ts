@@ -105,6 +105,7 @@ export class AppComponent {
     this.chartOptions.data = [];
 
     var resultTempSoil: any[] = [];
+    var resultTempEsp: any[] = [];
     var resultTempWater: any[] = [];
     var resultConducSoil: any[] = [];
 
@@ -112,6 +113,7 @@ export class AppComponent {
       res.forEach((el: any) => {
         console.log(el);
         resultTempSoil.push({ date: el.receivedAt, val: el.tempSoil });
+        resultTempEsp.push({ date: el.receivedAt, val: el.tempEsp });
         resultTempWater.push({ date: el.receivedAt, val: el.waterSoil });
         resultConducSoil.push({ date: el.receivedAt, val: el.conductSoil });
       });
@@ -127,6 +129,19 @@ export class AppComponent {
         showInLegend: true,
         name: 'Température sol',
         dataPoints: dataPointsSoil,
+      });
+
+      var dataPointsEsp: any[] = [];
+
+      resultTempEsp.forEach((esp) => {
+        dataPointsEsp.push({ x: new Date(esp.date), y: esp.val });
+      });
+
+      this.chartOptions.data.push({
+        type: 'line',
+        showInLegend: true,
+        name: 'Température esp',
+        dataPoints: dataPointsEsp,
       });
 
       var dataPointsWater: any[] = [];
