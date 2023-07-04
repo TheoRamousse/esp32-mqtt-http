@@ -7,10 +7,7 @@
 #include "../lib/arduinoJson.h"
 #include <EEPROM.h>
 #include <PubSubClient.h>
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
-#include <BLE2902.h>
+#include <ArduinoBLE.h>
 
 #define SERVICE_UUID "9e37b54e-52d1-493c-8969-3bf5c986987b"
 #define CHARACTERISTIC_UUID "4a840088-60bb-4edb-8eeb-1dc4dd3592c9"
@@ -18,59 +15,21 @@
 const char *ssid = "iPhone de Théo";
 const char *password = "zzzzzzzz";
 
-BLEServer *pServer;
-BLECharacteristic *pCharacteristic;
-bool deviceConnected = false;
-bool oldDeviceConnected = false;
+BLEService service("12345678-1234-5678-1234-56789abcdef0");                                 // UUID du service
+BLECharacteristic dataCharacteristic("00000000-0000-3200-0670-056000000001", BLEWrite, 20); // UUID de la caractéristique
 
 int TEMP_SLEEP_DURATION = 2;
 int CONNECTION_FREQ = 10;
-int PROTOCOLE = 2;
+int PROTOCOLE = 1;
 
 WiFiClient client;
 String urlHttp = "http://172.20.10.3:3001";
 const char *mqtt_server = "172.20.10.3";
-String idForBroker = "monSuperDevinhuhezhueriguruhuce123";
+String idForBroker = "monSuperDevinhnjnuhezhueriguruhuce123";
 
 PubSubClient mqttClient(client);
 
 int64_t tsStart;
-
-class MyServerCallbacks : public BLEServerCallbacks
-{
-  void onConnect(BLEServer *pServer)
-  {
-    deviceConnected = true;
-  }
-
-  void onDisconnect(BLEServer *pServer)
-  {
-    deviceConnected = false;
-  }
-};
-
-void processBLEData(String data)
-{
-
-  Serial.println("Données BLE reçues : " + data);
-
-  pCharacteristic->setValue("Données reçues avec succès !");
-  pCharacteristic->notify();
-}
-
-class MyCallbacks : public BLECharacteristicCallbacks
-{
-  void onWrite(BLECharacteristic *pCharacteristic)
-  {
-    std::string value = pCharacteristic->getValue();
-
-    if (value.length() > 0)
-    {
-      // Appeler la fonction pour traiter les données
-      processBLEData(value.c_str());
-    }
-  }
-};
 
 int64_t getTime()
 {
@@ -286,25 +245,21 @@ void setup()
   loadConfigFromEEPROM();
   initBuffer();
 
-  BLEDevice::init("ESP des Théos"); // Nom du périphérique BLE
-  pServer = BLEDevice::createServer();
-  pServer->setCallbacks(new MyServerCallbacks());
+  if (!BLE.begin())
+  {
+    Serial.println("Impossible de démarrer le BLE !");
+    while (1)
+      ;
+  }
 
-  BLEService *pService = pServer->createService(BLEUUID((uint16_t)0x180F)); // Service générique de batterie
+  // Configurez le service et les caractéristiques
+  BLE.setLocalName("Serveur de données");
+  BLE.setAdvertisedService(service);
+  service.addCharacteristic(dataCharacteristic);
+  BLE.addService(service);
 
-  pCharacteristic = pService->createCharacteristic(
-      BLEUUID((uint16_t)0x2A19), // Caractéristique de niveau de batterie
-      BLECharacteristic::PROPERTY_READ |
-          BLECharacteristic::PROPERTY_WRITE |
-          BLECharacteristic::PROPERTY_NOTIFY |
-          BLECharacteristic::PROPERTY_INDICATE);
-
-  pCharacteristic->setCallbacks(new MyCallbacks());
-
-  pCharacteristic->addDescriptor(new BLE2902());
-
-  pService->start();
-  pServer->getAdvertising()->start();
+  // Commencez à diffuser le service
+  BLE.advertise();
 
   tsStart = getTime();
 }
@@ -314,17 +269,10 @@ void loop()
 
   int64_t diff = getTime() - tsStart;
 
-  if (!deviceConnected && oldDeviceConnected)
+  if (dataCharacteristic.written())
   {
-    delay(500);                  // Attendre une déconnexion propre
-    pServer->startAdvertising(); // Recommencer l'annonce
-    Serial.println("Attente de la connexion BLE...");
-    oldDeviceConnected = deviceConnected;
-  }
-
-  if (deviceConnected && !oldDeviceConnected)
-  {
-    oldDeviceConnected = deviceConnected;
+    String res = (char *)dataCharacteristic.value();
+    Serial.println(res);
   }
 
   if (diff > CONNECTION_FREQ * 1000)
