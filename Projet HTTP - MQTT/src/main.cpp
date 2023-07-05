@@ -244,7 +244,7 @@ void setup()
   delay(1000);
 
   mqttClient.setServer(mqtt_server, 1883);
-  // loadConfigFromEEPROM();
+  loadConfigFromEEPROM();
   initBuffer();
 
   /*if (!BLE.begin())
@@ -309,5 +309,7 @@ void loop()
     initBuffer();
     tsStart = getTime();
   }
+
+  addValue(readTemp());
   delay(TEMP_SLEEP_DURATION * 1000);
 }
