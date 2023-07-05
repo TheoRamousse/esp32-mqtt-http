@@ -107,15 +107,17 @@ export class AppComponent {
     var resultTempSoil: any[] = [];
     var resultTempEsp: any[] = [];
     var resultTempWater: any[] = [];
-    var resultConducSoil: any[] = [];
 
     this.apiCallerService.getData().subscribe((res) => {
-      res.forEach((el: any) => {
+      res.lorawan.forEach((el: any) => {
         console.log(el);
         resultTempSoil.push({ date: el.receivedAt, val: el.tempSoil });
-        resultTempEsp.push({ date: el.receivedAt, val: el.tempEsp });
         resultTempWater.push({ date: el.receivedAt, val: el.waterSoil });
-        resultConducSoil.push({ date: el.receivedAt, val: el.conductSoil });
+      });
+
+      res.temperatures.forEach((el: any) => {
+        console.log(el);
+        resultTempEsp.push({ date: el.date, val: el.data });
       });
 
       var dataPointsSoil: any[] = [];
@@ -169,7 +171,7 @@ export class AppComponent {
     var resultConducSoil: any[] = [];
 
     this.apiCallerService.getData().subscribe((res) => {
-      res.forEach((el: any) => {
+      res.lorawan.forEach((el: any) => {
         console.log(el);
         resultConducSoil.push({ date: el.receivedAt, val: el.conductSoil });
       });
