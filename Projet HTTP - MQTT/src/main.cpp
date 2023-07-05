@@ -15,15 +15,15 @@
 const char *ssid = "iPhone de Théo";
 const char *password = "zzzzzzzz";
 
-BLEService service("12345678-1234-5678-1234-56789abcdef0");                                 // UUID du service
+/*BLEService service("12345678-1234-5678-1234-56789abcdef0");                                 // UUID du service
 BLECharacteristic dataCharacteristic("00000000-0000-3200-0670-056000000001", BLEWrite, 20); // UUID de la caractéristique
-
+*/
 int TEMP_SLEEP_DURATION = 2;
 int CONNECTION_FREQ = 10;
 int PROTOCOLE = 1;
 
 WiFiClient client;
-String urlHttp = "http://172.20.10.3:3001";
+String urlHttp = "http://172.20.10.3:3000";
 const char *mqtt_server = "172.20.10.3";
 String idForBroker = "monSuperDevinhnjnuhezhueriguruhuce123";
 
@@ -73,17 +73,16 @@ void loadConfigFromEEPROM()
 {
   EEPROM.begin(512); // Début de l'utilisation de l'EEPROM
 
-  int test;
-  EEPROM.get(0, test);
-
-  if (test != -1)
+  byte firstByte = EEPROM.read(0);
+  Serial.println(firstByte);
+  if (firstByte != 0xFF)
   {
-    // Chargement des données de configuration
     EEPROM.get(0, TEMP_SLEEP_DURATION);
     EEPROM.get(4, CONNECTION_FREQ);
     EEPROM.get(8, PROTOCOLE);
+    EEPROM.end();
+    return;
   }
-
   EEPROM.end(); // Fin de l'utilisation de l'EEPROM
 }
 
@@ -142,75 +141,76 @@ void sendRequest()
   Serial.println("\nConnecting");
   while (WiFi.status() != WL_CONNECTED)
   {
+    Serial.println('.');
     delay(200);
   }
 
   if ((WiFi.status() == WL_CONNECTED))
   { // Check the current connection status
+    HTTPClient httpGet;
+    httpGet.begin(client, urlHttp);
+    httpGet.addHeader("Content-Type", "application/json");
+    int httpCodeGet = httpGet.GET();
+
+    if (httpCodeGet > 0)
+    { // Check for the returning code
+      String payloadGet = httpGet.getString();
+      DynamicJsonDocument doc(256);
+      Serial.println(payloadGet);
+
+      DeserializationError error = deserializeJson(doc, payloadGet);
+
+      // Test if parsing succeeds.
+      if (error)
+      {
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.f_str());
+        return;
+      }
+
+      TEMP_SLEEP_DURATION = doc["tempFreq"];
+      CONNECTION_FREQ = doc["connectionFreq"];
+      PROTOCOLE = doc["connectionConfig"];
+
+      saveConfigToEEPROM();
+    }
+    else
+    {
+      Serial.println("Error on HTTP request GET");
+
+      String payloadGet = httpGet.getString();
+      Serial.println(httpCodeGet);
+      Serial.println(payloadGet);
+    }
+
+    httpGet.end();
     if (PROTOCOLE == 1)
     {
-      HTTPClient httpGet;
-      httpGet.begin(client, urlHttp);
-      httpGet.addHeader("Content-Type", "application/json");
-      int httpCodeGet = httpGet.GET();
 
-      if (httpCodeGet > 0)
+      HTTPClient http;
+      http.begin(client, urlHttp + "/api/esp32/esp32test");
+      http.addHeader("Content-Type", "application/json");
+      String text = serialize();
+      int httpCode = http.PUT(text);
+
+      if (httpCode > 0)
       { // Check for the returning code
-        String payloadGet = httpGet.getString();
-        DynamicJsonDocument doc(256);
-        Serial.println(payloadGet);
 
-        DeserializationError error = deserializeJson(doc, payloadGet);
-
-        // Test if parsing succeeds.
-        if (error)
-        {
-          Serial.print(F("deserializeJson() failed: "));
-          Serial.println(error.f_str());
-          return;
-        }
-
-        TEMP_SLEEP_DURATION = doc["tempFreq"];
-        CONNECTION_FREQ = doc["connectionFreq"];
-        PROTOCOLE = doc["connectionConfig"];
-
-        saveConfigToEEPROM();
-
-        HTTPClient http;
-        http.begin(client, urlHttp + "/api/esp32/esp32test");
-        http.addHeader("Content-Type", "application/json");
-        String text = serialize();
-        int httpCode = http.PUT(text);
-
-        if (httpCode > 0)
-        { // Check for the returning code
-
-          String payload = http.getString();
-          Serial.println(httpCode);
-          Serial.println(payload);
-        }
-
-        else
-        {
-          Serial.println("Error on HTTP request PUT");
-
-          String payload = http.getString();
-          Serial.println(httpCode);
-          Serial.println(payload);
-        }
-
-        http.end(); // Free the resources
+        String payload = http.getString();
+        Serial.println(httpCode);
+        Serial.println(payload);
       }
+
       else
       {
-        Serial.println("Error on HTTP request GET");
+        Serial.println("Error on HTTP request PUT");
 
-        String payloadGet = httpGet.getString();
-        Serial.println(httpCodeGet);
-        Serial.println(payloadGet);
+        String payload = http.getString();
+        Serial.println(httpCode);
+        Serial.println(payload);
       }
 
-      httpGet.end();
+      http.end(); // Free the resources
     }
     else
     {
@@ -225,6 +225,8 @@ void sendRequest()
 
         mqttClient.publish("esp", "esp32");
         String text = serialize();
+        Serial.println(text);
+        delay(1000);
         mqttClient.publish("esp32", text.c_str());
       }
 
@@ -242,10 +244,10 @@ void setup()
   delay(1000);
 
   mqttClient.setServer(mqtt_server, 1883);
-  loadConfigFromEEPROM();
+  // loadConfigFromEEPROM();
   initBuffer();
 
-  if (!BLE.begin())
+  /*if (!BLE.begin())
   {
     Serial.println("Impossible de démarrer le BLE !");
     while (1)
@@ -259,21 +261,47 @@ void setup()
   BLE.addService(service);
 
   // Commencez à diffuser le service
-  BLE.advertise();
+  BLE.advertise();*/
 
   tsStart = getTime();
 }
 
 void loop()
 {
+  /*BLEDevice central = BLE.central();
+
+  // Si une connexion est établie
+  if (central)
+  {
+    Serial.print("Connecté à : ");
+    Serial.println(central.address());
+
+    if (dataCharacteristic.written())
+    {
+      String res = (char *)dataCharacteristic.value();
+      delay(100);
+      Serial.println(res);
+      DynamicJsonDocument doc(256);
+
+      DeserializationError error = deserializeJson(doc, res);
+
+      // Test if parsing succeeds.
+      if (error)
+      {
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.f_str());
+        return;
+      }
+
+      TEMP_SLEEP_DURATION = doc["tempFreq"];
+      CONNECTION_FREQ = doc["connectionFreq"];
+      PROTOCOLE = doc["connectionConfig"];
+
+      saveConfigToEEPROM();
+    }
+  }*/
 
   int64_t diff = getTime() - tsStart;
-
-  if (dataCharacteristic.written())
-  {
-    String res = (char *)dataCharacteristic.value();
-    Serial.println(res);
-  }
 
   if (diff > CONNECTION_FREQ * 1000)
   {
@@ -281,9 +309,5 @@ void loop()
     initBuffer();
     tsStart = getTime();
   }
-
-  addValue(readTemp());
-  esp_sleep_enable_timer_wakeup(TEMP_SLEEP_DURATION * 100000);
-  delay(500);
-  esp_light_sleep_start();
+  delay(TEMP_SLEEP_DURATION * 1000);
 }
