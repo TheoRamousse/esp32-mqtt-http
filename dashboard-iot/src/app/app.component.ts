@@ -12,6 +12,46 @@ export class AppComponent {
   title = 'ng2-charts-demo';
   chart: any;
   chart2: any;
+  chart3: any;
+
+  chartOptions3 = {
+    animationEnabled: true,
+    theme: environment.theme,
+    title: {
+      text: 'Température ESP32',
+    },
+    axisX: {
+      valueFormatString: environment.dateFormat,
+    },
+    axisY: {
+      title: 'Température en °C',
+    },
+    toolTip: {
+      shared: true,
+    },
+    legend: {
+      cursor: 'pointer',
+      itemclick: function (e: any) {
+        if (
+          typeof e.dataSeries.visible === 'undefined' ||
+          e.dataSeries.visible
+        ) {
+          e.dataSeries.visible = false;
+        } else {
+          e.dataSeries.visible = true;
+        }
+        e.chart.render();
+      },
+    },
+    data: [
+      {
+        type: 'line',
+        showInLegend: true,
+        name: '',
+        dataPoints: [{ x: 1, y: 10 }],
+      },
+    ],
+  };
 
   chartOptions2 = {
     animationEnabled: true,
@@ -101,11 +141,15 @@ export class AppComponent {
     setTimeout(this.updateChart2, 1000);
   }
 
+  getChartInstance3(chart: object) {
+    this.chart3 = chart;
+    setTimeout(this.updateChart3, 1000);
+  }
+
   updateChart = () => {
     this.chartOptions.data = [];
 
     var resultTempSoil: any[] = [];
-    var resultTempEsp: any[] = [];
     var resultTempWater: any[] = [];
 
     this.apiCallerService.getData().subscribe((res) => {
@@ -113,11 +157,6 @@ export class AppComponent {
         console.log(el);
         resultTempSoil.push({ date: el.receivedAt, val: el.tempSoil });
         resultTempWater.push({ date: el.receivedAt, val: el.waterSoil });
-      });
-
-      res.temperatures.forEach((el: any) => {
-        console.log(el);
-        resultTempEsp.push({ date: el.date, val: el.data });
       });
 
       var dataPointsSoil: any[] = [];
@@ -134,10 +173,6 @@ export class AppComponent {
       });
 
       var dataPointsEsp: any[] = [];
-
-      resultTempEsp.forEach((esp) => {
-        dataPointsEsp.push({ x: new Date(esp.date), y: esp.val });
-      });
 
       this.chartOptions.data.push({
         type: 'line',
@@ -196,6 +231,37 @@ export class AppComponent {
     });
 
     setTimeout(this.updateChart2, environment.refreshTimeMs); //Chart updated every 1 second
+  };
+
+  updateChart3 = () => {
+    this.chartOptions3.data = [];
+
+    var resultTempEsp: any[] = [];
+
+    this.apiCallerService.getData().subscribe((res) => {
+      
+      res.temperatures.forEach((el: any) => {
+        console.log(el);
+        resultTempEsp.push({ date: el.date, val: el.data });
+      });
+
+      var dataPointsEsp: any[] = [];
+
+      resultTempEsp.forEach((esp) => {
+        dataPointsEsp.push({ x: new Date(esp.date), y: esp.val });
+      });
+
+      this.chartOptions3.data.push({
+        type: 'line',
+        showInLegend: true,
+        name: 'Température ESP',
+        dataPoints: dataPointsEsp,
+      });
+
+      this.chart3.render();
+    });
+
+    setTimeout(this.updateChart3, environment.refreshTimeMs); //Chart updated every 1 second
   };
 
   constructor(private apiCallerService: ApiCallerService) {}
