@@ -15,9 +15,8 @@
 const char *ssid = "iPhone de Théo";
 const char *password = "zzzzzzzz";
 
-/*BLEService service("12345678-1234-5678-1234-56789abcdef0");                                 // UUID du service
+BLEService service("12345678-1234-5678-1234-56789abcdef0");                                 // UUID du service
 BLECharacteristic dataCharacteristic("00000000-0000-3200-0670-056000000001", BLEWrite, 20); // UUID de la caractéristique
-*/
 int TEMP_SLEEP_DURATION = 2;
 int CONNECTION_FREQ = 10;
 int PROTOCOLE = 1;
@@ -247,7 +246,7 @@ void setup()
   loadConfigFromEEPROM();
   initBuffer();
 
-  /*if (!BLE.begin())
+  if (!BLE.begin())
   {
     Serial.println("Impossible de démarrer le BLE !");
     while (1)
@@ -261,14 +260,14 @@ void setup()
   BLE.addService(service);
 
   // Commencez à diffuser le service
-  BLE.advertise();*/
+  BLE.advertise();
 
   tsStart = getTime();
 }
 
 void loop()
 {
-  /*BLEDevice central = BLE.central();
+  BLEDevice central = BLE.central();
 
   // Si une connexion est établie
   if (central)
@@ -299,7 +298,7 @@ void loop()
 
       saveConfigToEEPROM();
     }
-  }*/
+  }
 
   int64_t diff = getTime() - tsStart;
 
